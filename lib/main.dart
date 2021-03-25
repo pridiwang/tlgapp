@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_html/style.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_html/flutter_html.dart';
-import 'package:flutter_html/image_render.dart';
+import 'package:audio/audio.dart';
 
 Future<List<Photo>> fetchPhotos(http.Client client) async {
   final response =
@@ -106,9 +106,19 @@ class MyApp extends StatelessWidget {
   }
 }
 
-class DetailPage extends StatelessWidget {
+class DetailPage extends StatefulWidget {
   final Content content;
-  DetailPage({this.content});
+  const DetailPage({Key key, this.content}) : super(key: key);
+
+  @override
+  _DetailPageState createState() => _DetailPageState();
+}
+
+class _DetailPageState extends State<DetailPage> {
+  initState() {
+    super.initState();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -133,18 +143,21 @@ class DetailPage extends StatelessWidget {
             height: 252,
             decoration: BoxDecoration(
               image: DecorationImage(
-                image: NetworkImage(content.img),
+                image: NetworkImage(widget.content.img),
                 fit: BoxFit.cover,
               ),
             ),
           ),
           Container(
             padding: EdgeInsets.all(5),
-            child: Text(content.title,
+            child: Text(widget.content.title,
                 style: TextStyle(
                     height: 0.85, fontSize: 28, color: Colors.deepPurple)),
           ),
+
           /*
+          Text(widget.content.url),
+          AudioPlayerDemo(widget.content.url),
           Container(
             padding: EdgeInsets.all(10),
             height: 2000,
@@ -157,7 +170,7 @@ class DetailPage extends StatelessWidget {
             padding: EdgeInsets.all(0),
             child: Html(
                 data: '<p>' +
-                    content.content +
+                    widget.content.content +
                     '<style>*{font-size:20pt;}</style>',
                 style: {
                   "p": Style(
@@ -196,9 +209,7 @@ class MyHomePage extends StatelessWidget {
 
 class ContentsList extends StatelessWidget {
   final List<Content> contents;
-
   ContentsList({Key key, this.contents}) : super(key: key);
-
   @override
   Widget build(BuildContext context) {
     return GridView.builder(
@@ -267,5 +278,152 @@ class PhotosList extends StatelessWidget {
         return Image.network(photos[index].thumbnailUrl);
       },
     );
+  }
+}
+
+class AudioPlayerDemo extends StatefulWidget {
+  final String url;
+
+  AudioPlayerDemo(this.url);
+
+  @override
+  State<StatefulWidget> createState() => AudioPlayerDemoState();
+}
+
+class AudioPlayerDemoState extends State<AudioPlayerDemo> {
+  Audio audioPlayer = new Audio(single: true);
+  AudioPlayerState state = AudioPlayerState.STOPPED;
+  double position = 0;
+  int buffering = 0;
+  StreamSubscription<AudioPlayerState> _playerStateSubscription;
+  StreamSubscription<double> _playerPositionController;
+  StreamSubscription<int> _playerBufferingSubscription;
+  StreamSubscription<AudioPlayerError> _playerErrorSubscription;
+
+  @override
+  void initState() {
+    _playerStateSubscription =
+        audioPlayer.onPlayerStateChanged.listen((AudioPlayerState state) {
+      print("onPlayerStateChanged: ${audioPlayer.uid} $state");
+
+      if (mounted) setState(() => this.state = state);
+    });
+
+    _playerPositionController =
+        audioPlayer.onPlayerPositionChanged.listen((double position) {
+      print(
+          "onPlayerPositionChanged: ${audioPlayer.uid} $position ${audioPlayer.duration}");
+
+      if (mounted) setState(() => this.position = position);
+    });
+
+    _playerBufferingSubscription =
+        audioPlayer.onPlayerBufferingChanged.listen((int percent) {
+      print("onPlayerBufferingChanged: ${audioPlayer.uid} $percent");
+
+      if (mounted && buffering != percent) setState(() => buffering = percent);
+    });
+
+    _playerErrorSubscription =
+        audioPlayer.onPlayerError.listen((AudioPlayerError error) {
+      throw ("onPlayerError: ${error.code} ${error.message}");
+    });
+
+    audioPlayer.preload(widget.url);
+
+    super.initState();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    Widget status = Container();
+
+    print(
+        "[build] uid=${audioPlayer.uid} duration=${audioPlayer.duration} state=$state");
+
+    switch (state) {
+      case AudioPlayerState.LOADING:
+        {
+          status = Container(
+              padding: const EdgeInsets.all(12.0),
+              child: Container(
+                width: 24.0,
+                height: 24.0,
+                child: Center(
+                    child: Stack(
+                  alignment: AlignmentDirectional.center,
+                  children: <Widget>[
+                    CircularProgressIndicator(strokeWidth: 2.0),
+                    Text("${buffering}%",
+                        style: TextStyle(fontSize: 8.0),
+                        textAlign: TextAlign.center)
+                  ],
+                )),
+              ));
+          break;
+        }
+
+      case AudioPlayerState.PLAYING:
+        {
+          status = IconButton(
+              icon: Icon(Icons.pause, size: 28.0), onPressed: onPause);
+          break;
+        }
+
+      case AudioPlayerState.READY:
+      case AudioPlayerState.PAUSED:
+      case AudioPlayerState.STOPPED:
+        {
+          status = IconButton(
+              icon: Icon(Icons.play_arrow, size: 28.0), onPressed: onPlay);
+
+          if (state == AudioPlayerState.STOPPED) audioPlayer.seek(0.0);
+
+          break;
+        }
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 32.0, horizontal: 16.0),
+      child: Column(
+        children: <Widget>[
+          Text(audioPlayer.uid),
+          Row(
+            children: <Widget>[
+              status,
+              Slider(
+                max: audioPlayer.duration.toDouble(),
+                value: position.toDouble(),
+                onChanged: onSeek,
+              ),
+              Text("${audioPlayer.duration.toDouble()}ms")
+            ],
+          )
+        ],
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _playerStateSubscription.cancel();
+    _playerPositionController.cancel();
+    _playerBufferingSubscription.cancel();
+    _playerErrorSubscription.cancel();
+    audioPlayer.release();
+    super.dispose();
+  }
+
+  onPlay() {
+    audioPlayer.play(widget.url);
+  }
+
+  onPause() {
+    audioPlayer.pause();
+  }
+
+  onSeek(double value) {
+    // Note: We can only seek if the audio is ready
+    audioPlayer.seek(value);
   }
 }
