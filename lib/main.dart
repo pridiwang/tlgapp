@@ -126,6 +126,11 @@ class _DetailPageState extends State<DetailPage> {
       onDoubleTap: () {
         Navigator.pop(context);
       },
+      onHorizontalDragEnd: (dragEndDetails) {
+        if (dragEndDetails.primaryVelocity > 0) {
+          Navigator.pop(context);
+        }
+      },
       child: SingleChildScrollView(
           child: Column(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -152,7 +157,10 @@ class _DetailPageState extends State<DetailPage> {
             padding: EdgeInsets.all(5),
             child: Text(widget.content.title,
                 style: TextStyle(
-                    height: 0.85, fontSize: 28, color: Colors.deepPurple)),
+                  height: 0.85,
+                  fontSize: 32,
+                  color: Colors.blueGrey,
+                )),
           ),
 
           /*
@@ -171,11 +179,14 @@ class _DetailPageState extends State<DetailPage> {
             child: Html(
                 data: '<p>' +
                     widget.content.content +
-                    '<style>*{font-size:20pt;}</style>',
+                    '<style>*{font-size:24pt;}</style>',
                 style: {
                   "p": Style(
-                      fontSize: FontSize.xLarge,
-                      lineHeight: LineHeight.percent(80)),
+                    fontSize: FontSize.xLarge,
+                    lineHeight: LineHeight.percent(75),
+                    textAlign: TextAlign.justify,
+                    padding: EdgeInsets.all(10),
+                  ),
                 }),
           ),
         ],
